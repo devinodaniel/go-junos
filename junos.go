@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Juniper/go-netconf/netconf"
+	"github.com/devinodaniel/go-netconf/netconf"
 )
 
 // All of our RPC calls we use.
@@ -159,7 +159,85 @@ func NewSession(host, user, password string, logger ...interface{}) (*Junos, err
 
 	s, err := netconf.DialSSH(host, netconf.SSHConfigPassword(user, password))
 	if err != nil {
+		return nil, err
+	}
+
+	reply, err := s.Exec(netconf.RawMethod(rpcVersion))
+	if err != nil {
+		return nil, err
+	}
+
+	if reply.Errors != nil {
+		for _, m := range reply.Errors {
+			return nil, errors.New(m.Message)
+		}
+	}
+
+	formatted := strings.Replace(reply.Data, "\n", "", -1)
+
+	if strings.Contains(reply.Data, "multi-routing-engine-results") {
+		var facts versionRouteEngines
+		err = xml.Unmarshal([]byte(formatted), &facts)
+		if err != nil {
+			return nil, err
+		}
+
+		numRE := len(facts.RE)
+		hostname := facts.RE[0].Hostname
+		res := make([]RoutingEngine, 0, numRE)
+
+		for i := 0; i < numRE; i++ {
+			version := rex.FindStringSubmatch(facts.RE[i].PackageInfo[0].SoftwareVersion[0])
+			model := strings.ToUpper(facts.RE[i].Platform)
+			res = append(res, RoutingEngine{Model: model, Version: version[1]})
+		}
+
+		return &Junos{
+			Session:        s,
+			Hostname:       hostname,
+			RoutingEngines: numRE,
+			Platform:       res,
+			CommitDelay:    0,
+		}, nil
+	}
+
+	var facts versionRouteEngine
+	err = xml.Unmarshal([]byte(formatted), &facts)
+	if err != nil {
+		return nil, err
+	}
+
+	// res := make([]RoutingEngine, 0)
+	var res []RoutingEngine
+	hostname := facts.Hostname
+	version := rex.FindStringSubmatch(facts.PackageInfo[0].SoftwareVersion[0])
+	model := strings.ToUpper(facts.Platform)
+	res = append(res, RoutingEngine{Model: model, Version: version[1]})
+
+	return &Junos{
+		Session:        s,
+		Hostname:       hostname,
+		RoutingEngines: 1,
+		Platform:       res,
+		CommitDelay:    0,
+	}, nil
+}
+
+// NewKeySession establishes a new connection to a Junos device that we will use
+// to run our commands against. This works the same way as NewSession but uses a
+// SSH key instead of a text password to authenticate. Note: Private SSH key must
+// be pre-added to SSH Agent on host if using a Passphrase
+func NewKeySession(host string, user string) (*Junos, error) {
+	rex := regexp.MustCompile(`^.*\[(.*)\]`)
+
+	key, err := netconf.SSHConfigPubKeyAgent(user)
+	if err != nil {
 		log.Fatal(err)
+	}
+
+	s, err := netconf.DialSSH(host, key)
+	if err != nil {
+		return nil, err
 	}
 
 	reply, err := s.Exec(netconf.RawMethod(rpcVersion))
