@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"regexp"
 	"strings"
 	"time"
@@ -225,14 +224,13 @@ func NewSession(host, user, password string, logger ...interface{}) (*Junos, err
 
 // NewKeySession establishes a new connection to a Junos device that we will use
 // to run our commands against. This works the same way as NewSession but uses a
-// SSH key instead of a text password to authenticate. Note: Private SSH key must
-// be pre-added to SSH Agent on host if using a Passphrase
-func NewKeySession(host string, user string) (*Junos, error) {
+// SSH key instead of a text password to authenticate.
+func NewKeySession(host string, user string, privateKey string) (*Junos, error) {
 	rex := regexp.MustCompile(`^.*\[(.*)\]`)
 
-	key, err := netconf.SSHConfigPubKeyAgent(user)
+	key, err := netconf.SSHConfigPubKeyRaw(user, privateKey)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	s, err := netconf.DialSSH(host, key)
