@@ -18,6 +18,7 @@ import (
 var (
 	rpcCommand             = "<command format=\"text\">%s</command>"
 	rpcCommandXML          = "<command format=\"xml\">%s</command>"
+	rpcCommandJSON         = "<command format=\"json\">%s</command>"
 	rpcCommit              = "<commit-configuration/>"
 	rpcCommitAt            = "<commit-configuration><at-time>%s</at-time></commit-configuration>"
 	rpcCommitAtLog         = "<commit-configuration><at-time>%s</at-time><log>%s</log></commit-configuration>"
@@ -312,6 +313,10 @@ func (j *Junos) Command(cmd string, format ...string) (string, error) {
 
 	if len(format) > 0 && format[0] == "xml" {
 		command = fmt.Sprintf(rpcCommandXML, cmd)
+	}
+
+	if len(format) > 0 && format[0] == "json" {
+		command = fmt.Sprintf(rpcCommandJSON, cmd)
 	}
 
 	reply, err := j.Session.Exec(netconf.RawMethod(command))
